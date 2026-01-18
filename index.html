@@ -726,6 +726,12 @@
             }
 
             hideError();
+
+            // Update URL with the current post URL for sharing
+            const newUrl = new URL(window.location);
+            newUrl.searchParams.set('url', url);
+            history.replaceState(null, '', newUrl);
+
             loading.classList.add('show');
             postContainer.classList.remove('show');
             viewBtn.disabled = true;
