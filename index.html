@@ -95,6 +95,20 @@
             background-color: #4b5563;
         }
 
+        @media (max-width: 480px) {
+            .input-wrapper {
+                flex-wrap: wrap;
+            }
+
+            .input-wrapper input[type="text"] {
+                width: 100%;
+            }
+
+            .input-wrapper button {
+                flex: 1;
+            }
+        }
+
         .error {
             background: #fef2f2;
             border: 1px solid #fecaca;
