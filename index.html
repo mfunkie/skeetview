@@ -421,6 +421,61 @@
             return response.json();
         }
 
+        // Fetch a single post by URI (for blocked/hidden quotes)
+        async function fetchPostByUri(uri) {
+            try {
+                const response = await fetch(`${API_BASE}/app.bsky.feed.getPosts?uris=${encodeURIComponent(uri)}`);
+                if (!response.ok) return null;
+                const data = await response.json();
+                return data.posts && data.posts[0] ? data.posts[0] : null;
+            } catch {
+                return null;
+            }
+        }
+
+        // Pre-fetch any blocked quotes in a post
+        async function fetchBlockedQuotes(post) {
+            const embed = post.embed;
+            if (!embed) return;
+
+            // Check for blocked record embed
+            if (embed.$type === 'app.bsky.embed.record#view' && embed.record) {
+                if (embed.record.$type === 'app.bsky.embed.record#viewBlocked' && embed.record.uri) {
+                    const fetchedPost = await fetchPostByUri(embed.record.uri);
+                    if (fetchedPost) {
+                        // Convert to viewRecord format
+                        embed.record = {
+                            $type: 'app.bsky.embed.record#viewRecord',
+                            uri: fetchedPost.uri,
+                            cid: fetchedPost.cid,
+                            author: fetchedPost.author,
+                            value: fetchedPost.record,
+                            embeds: fetchedPost.embed ? [fetchedPost.embed] : [],
+                            indexedAt: fetchedPost.indexedAt
+                        };
+                    }
+                }
+            }
+
+            // Check for recordWithMedia
+            if (embed.$type === 'app.bsky.embed.recordWithMedia#view' && embed.record?.record) {
+                if (embed.record.record.$type === 'app.bsky.embed.record#viewBlocked' && embed.record.record.uri) {
+                    const fetchedPost = await fetchPostByUri(embed.record.record.uri);
+                    if (fetchedPost) {
+                        embed.record.record = {
+                            $type: 'app.bsky.embed.record#viewRecord',
+                            uri: fetchedPost.uri,
+                            cid: fetchedPost.cid,
+                            author: fetchedPost.author,
+                            value: fetchedPost.record,
+                            embeds: fetchedPost.embed ? [fetchedPost.embed] : [],
+                            indexedAt: fetchedPost.indexedAt
+                        };
+                    }
+                }
+            }
+        }
+
         // Format date
         function formatDate(dateString) {
             const date = new Date(dateString);
@@ -578,9 +633,11 @@
                 if (quotedRecord.$type === 'app.bsky.embed.record#viewRecord') {
                     html += renderQuotedRecord(quotedRecord);
                 } else if (quotedRecord.$type === 'app.bsky.embed.record#viewBlocked') {
-                    html += `<div class="blocked-notice">This quoted post is from a user who has blocked you or who you have blocked.</div>`;
+                    html += `<div class="blocked-notice">This quoted post could not be loaded. The author may have deleted it or deactivated their account.</div>`;
                 } else if (quotedRecord.$type === 'app.bsky.embed.record#viewNotFound') {
                     html += `<div class="blocked-notice">The quoted post could not be found. It may have been deleted.</div>`;
+                } else if (quotedRecord.$type === 'app.bsky.embed.record#viewDetached') {
+                    html += `<div class="blocked-notice">The quoted post has been detached by its author.</div>`;
                 }
             }
 
@@ -596,7 +653,7 @@
                     if (quotedRecord.$type === 'app.bsky.embed.record#viewRecord') {
                         html += renderQuotedRecord(quotedRecord);
                     } else if (quotedRecord.$type === 'app.bsky.embed.record#viewBlocked') {
-                        html += `<div class="blocked-notice">This quoted post is from a user who has blocked you or who you have blocked.</div>`;
+                        html += `<div class="blocked-notice">This quoted post could not be loaded. The author may have deleted it or deactivated their account.</div>`;
                     }
                 }
             }
@@ -689,6 +746,10 @@
 
                 // Render the post
                 const post = thread.thread.post;
+
+                // Try to fetch any blocked quotes
+                await fetchBlockedQuotes(post);
+
                 postContainer.innerHTML = renderPost(post);
                 postContainer.classList.add('show');
 
